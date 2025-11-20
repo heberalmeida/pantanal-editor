@@ -1,0 +1,49 @@
+.pantanal-page {
+  min-height: 100vh;
+  padding: 2rem;
+  background: linear-gradient(180deg, #f9faff 0%, #eef2ff 100%);
+  font-family: var(--pan-editor-font-family-sans);
+  color: var(--pan-editor-text);
+}
+
+.demo-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 960px) {
+  .demo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.demo-card {
+  background: var(--pan-editor-bg);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  box-shadow: var(--pan-editor-shadow);
+  border: var(--pan-editor-border);
+}
+
+.demo-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.demo-card h2 {
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.demo-meta {
+  font-size: 0.85rem;
+  color: var(--pan-editor-text-muted);
+}
+
+
+
+
+
+

@@ -1,0 +1,35 @@
+:root {
+  --pan-editor-font-family-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --pan-editor-radius-sm: 6px;
+  --pan-editor-radius-md: 10px;
+  --pan-editor-border: 1px solid #e0e5ec;
+  --pan-editor-border-strong: 1px solid #c4cad4;
+  --pan-editor-bg: #ffffff;
+  --pan-editor-bg-subtle: #f5f7fb;
+  --pan-editor-bg-strong: #f0f2f7;
+  --pan-editor-text: #1c1f2b;
+  --pan-editor-text-muted: #5f667c;
+  --pan-editor-accent: #2563eb;
+  --pan-editor-accent-strong: #1d4ed8;
+  --pan-editor-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+  --pan-editor-toolbar-height: 48px;
+}
+
+[data-theme='dark'] {
+  --pan-editor-border: 1px solid #2a3142;
+  --pan-editor-border-strong: 1px solid #3d4559;
+  --pan-editor-bg: #111322;
+  --pan-editor-bg-subtle: #16192b;
+  --pan-editor-bg-strong: #1c2034;
+  --pan-editor-text: #f4f5fb;
+  --pan-editor-text-muted: #9aa0b8;
+  --pan-editor-accent: #60a5fa;
+  --pan-editor-accent-strong: #3b82f6;
+  --pan-editor-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+
+
+
+
+

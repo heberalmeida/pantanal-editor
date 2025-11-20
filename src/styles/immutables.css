@@ -1,0 +1,40 @@
+/**
+ * Styles for immutable elements
+ */
+
+.pan-immutable,
+[data-immutable] {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+  cursor: default;
+  outline: 2px dashed rgba(0, 0, 0, 0.1);
+  outline-offset: 2px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 2px;
+  padding: 2px 4px;
+  margin: 0 2px;
+}
+
+.pan-immutable:hover,
+[data-immutable]:hover {
+  outline-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pan-immutable::before,
+[data-immutable]::before {
+  content: '🔒';
+  font-size: 0.75em;
+  margin-right: 2px;
+  opacity: 0.5;
+  vertical-align: middle;
+}
+
+.pan-immutable[contenteditable="false"] {
+  pointer-events: auto;
+}
+
+
+
+
