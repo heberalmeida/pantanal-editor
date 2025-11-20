@@ -290,7 +290,7 @@ const convertLegacyFormat = (html: string): string => {
       <div>
         <h1 style="margin:0;font-size:2rem;">Pantanal Editor Playground</h1>
         <p style="margin:0.5rem 0 0;color:var(--pan-editor-text-muted);">
-          Vue 3 + TypeScript + native DOM editing. Toolbar inspired by Kendo.
+          Vue 3 + TypeScript + native DOM editing.
         </p>
       </div>
       <button

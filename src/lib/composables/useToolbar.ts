@@ -36,6 +36,8 @@ const BASE_TOOLBAR: ToolbarItem[] = [
   { id: 'createLink', label: 'Link', icon: 'link', command: 'createLink', kind: 'button' },
   { id: 'insertImage', label: 'Image', icon: 'image', command: 'insertImage', kind: 'button' },
   { id: 'clearFormatting', label: 'Clear', icon: 'clear', command: 'clearFormatting', kind: 'button' },
+  { id: 'preview', label: 'Preview', icon: 'preview', kind: 'button' },
+  { id: 'viewHtml', label: 'HTML', icon: 'code', kind: 'button' },
 ];
 
 export const useToolbar = (

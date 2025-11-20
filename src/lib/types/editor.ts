@@ -15,6 +15,7 @@ export type EditorCommand =
   | 'justifyFull'
   | 'createLink'
   | 'insertImage'
+  | 'insertHTML'
   | 'removeFormat'
   | 'undo'
   | 'redo'
@@ -69,4 +70,3 @@ export type DeserializationCustom = (html: string) => string;
  * Accepts HTML string and returns modified HTML string
  */
 export type SerializationCustom = (html: string) => string;
-

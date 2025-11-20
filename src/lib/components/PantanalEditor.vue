@@ -82,11 +82,45 @@ const showFileBrowser = ref(false);
 const showImageBrowser = ref(false);
 const showLinkModal = ref(false);
 const showImageUrlModal = ref(false);
-const linkUrl = ref('https://');
+const linkUrl = ref('');
 const linkText = ref('');
 const linkTarget = ref<'_self' | '_blank'>('_self');
-const imageUrl = ref('https://');
+const imageUrl = ref('');
+const imageAlt = ref('');
+const imageWidth = ref(100);
 const selectionSnapshot = ref<Range[] | null>(null);
+const linkEditingTarget = ref<HTMLAnchorElement | null>(null);
+const imageEditingTarget = ref<HTMLImageElement | null>(null);
+const showPreviewModal = ref(false);
+const showHtmlModal = ref(false);
+const previewContent = computed(() => core.html.value);
+const htmlSource = computed(() => core.html.value);
+const highlightedHtml = computed(() => {
+  const escapeHtml = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const highlightLine = (line: string) => {
+    let escaped = escapeHtml(line);
+    escaped = escaped.replace(/(&lt;\/?)([a-zA-Z0-9:-]+)/g, (_, open, tag) => {
+      return `${open}<span class="pan-code-tag">${tag}</span>`;
+    });
+    escaped = escaped.replace(/([a-zA-Z0-9:-]+)=&quot;([^&]*?)&quot;/g, (_match, attr, val) => {
+      return `<span class="pan-code-attr">${attr}</span>=<span class="pan-code-string">&quot;${val}&quot;</span>`;
+    });
+    return escaped;
+  };
+  return htmlSource.value
+    .split('\n')
+    .map((line, index) => {
+      const content = highlightLine(line);
+      return `<div class="pan-code-line"><span class="pan-code-line-number">${index + 1}</span><span class="pan-code-line-content">${content || '&nbsp;'}</span></div>`;
+    })
+    .join('');
+});
+const activeImage = ref<HTMLImageElement | null>(null);
+const imageWidthControl = ref(100);
+const imageAlignment = ref<'inline' | 'left' | 'center' | 'right'>('inline');
+const imageControlsStyle = ref<{ top: string; left: string }>({ top: '0px', left: '0px' });
+let currentLayer: HTMLElement | null = null;
 
 const cloneRanges = (ranges: Range[] | null) => ranges?.map((range) => range.cloneRange()) ?? null;
 
@@ -100,6 +134,73 @@ const restoreSelectionSnapshot = () => {
   if (!selection) return;
   selection.removeAllRanges();
   selectionSnapshot.value.forEach((range) => selection.addRange(range));
+};
+
+const detectImageAlignment = (image: HTMLImageElement): 'inline' | 'left' | 'center' | 'right' => {
+  if (image.style.float === 'left') return 'left';
+  if (image.style.float === 'right') return 'right';
+  if (image.style.display === 'block' && image.style.marginLeft === 'auto' && image.style.marginRight === 'auto') {
+    return 'center';
+  }
+  return 'inline';
+};
+
+const applyImageAlignment = (image: HTMLImageElement, alignment: 'inline' | 'left' | 'center' | 'right') => {
+  image.style.removeProperty('float');
+  image.style.removeProperty('display');
+  image.style.removeProperty('margin');
+  image.style.removeProperty('vertical-align');
+  if (alignment === 'left') {
+    image.style.float = 'left';
+    image.style.display = 'inline-block';
+    image.style.margin = '0 1rem 0.75rem 0';
+    image.style.verticalAlign = 'top';
+  } else if (alignment === 'right') {
+    image.style.float = 'right';
+    image.style.display = 'inline-block';
+    image.style.margin = '0 0 0.75rem 1rem';
+    image.style.verticalAlign = 'top';
+  } else if (alignment === 'center') {
+    image.style.display = 'block';
+    image.style.margin = '0 auto 0.75rem';
+  } else {
+    image.style.display = 'inline-block';
+    image.style.verticalAlign = 'top';
+  }
+};
+
+const updateImageControlsPosition = () => {
+  if (!activeImage.value || !editorRef.value) return;
+  const imageRect = activeImage.value.getBoundingClientRect();
+  const editorRect = editorRef.value.getBoundingClientRect();
+  const top = Math.max(0, imageRect.top - editorRect.top - 40);
+  const left = Math.max(0, imageRect.left - editorRect.left);
+  imageControlsStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+  };
+};
+
+const getImageWidthPercent = (image?: HTMLImageElement | null) => {
+  if (!image) return 100;
+  const styleWidth = image.style.width.trim();
+  if (styleWidth.endsWith('%')) {
+    const value = parseFloat(styleWidth);
+    if (!Number.isNaN(value)) return value;
+  }
+  if (styleWidth.endsWith('px') && image.parentElement) {
+    const px = parseFloat(styleWidth);
+    const parentWidth = image.parentElement.clientWidth || 1;
+    if (!Number.isNaN(px) && parentWidth > 0) {
+      return Math.min(100, Math.max(10, Math.round((px / parentWidth) * 100)));
+    }
+  }
+  const widthPx = image.clientWidth;
+  const parentWidth = image.parentElement?.clientWidth || widthPx || 1;
+  if (parentWidth > 0) {
+    return Math.min(100, Math.max(10, Math.round((widthPx / parentWidth) * 100)));
+  }
+  return 100;
 };
 
 const handleFileSelect = (url: string) => {
@@ -123,20 +224,40 @@ const getSelectionLink = () => {
   return node instanceof HTMLElement ? node.closest('a') : null;
 };
 
-const handleRequestLink = (lastValue: string) => {
-  saveSelectionSnapshot();
-  const selection = window.getSelection();
-  const selectedText = selection?.toString().trim() ?? '';
-  const existingLink = getSelectionLink();
-  linkText.value = selectedText || existingLink?.textContent || '';
-  linkUrl.value = existingLink?.getAttribute('href') || lastValue || 'https://';
-  linkTarget.value = existingLink?.getAttribute('target') === '_blank' ? '_blank' : '_self';
+const handleRequestLink = (lastValue: string, anchor?: HTMLAnchorElement | null) => {
+  if (anchor) {
+    selectionSnapshot.value = null;
+    linkEditingTarget.value = anchor;
+    linkText.value = anchor.textContent || '';
+    linkUrl.value = anchor.getAttribute('href') || '';
+    linkTarget.value = anchor.getAttribute('target') === '_blank' ? '_blank' : '_self';
+  } else {
+    saveSelectionSnapshot();
+    linkEditingTarget.value = null;
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim() ?? '';
+    const existingLink = getSelectionLink();
+    linkText.value = selectedText || existingLink?.textContent || '';
+    linkUrl.value = existingLink?.getAttribute('href') || '';
+    linkTarget.value = existingLink?.getAttribute('target') === '_blank' ? '_blank' : '_self';
+  }
   showLinkModal.value = true;
 };
 
-const handleRequestImageUrl = (lastValue: string) => {
-  saveSelectionSnapshot();
-  imageUrl.value = lastValue || 'https://';
+const handleRequestImageUrl = (lastValue: string, image?: HTMLImageElement | null) => {
+  if (image) {
+    selectionSnapshot.value = null;
+    imageEditingTarget.value = image;
+    imageUrl.value = image.getAttribute('src') || '';
+    imageAlt.value = image.getAttribute('alt') || '';
+    imageWidth.value = getImageWidthPercent(image);
+  } else {
+    saveSelectionSnapshot();
+    imageEditingTarget.value = null;
+    imageUrl.value = '';
+    imageAlt.value = '';
+    imageWidth.value = 100;
+  }
   showImageUrlModal.value = true;
 };
 
@@ -158,6 +279,16 @@ const { handlePaste } = usePaste({
 const canvasRef = ref<InstanceType<typeof EditorCanvas> | null>(null);
 const editorRef = ref<HTMLElement | null>(null);
 
+const attachLayerListeners = (layer: HTMLElement | null) => {
+  if (currentLayer) {
+    currentLayer.removeEventListener('click', handleLayerContentClick, true);
+  }
+  if (layer) {
+    layer.addEventListener('click', handleLayerContentClick, true);
+  }
+  currentLayer = layer;
+};
+
 const bindLayer = () => {
   const layer = canvasRef.value?.layer || null;
   if (!layer) return;
@@ -165,6 +296,7 @@ const bindLayer = () => {
   if (props.modelValue) {
     layer.innerHTML = props.modelValue;
   }
+  attachLayerListeners(layer);
 };
 
 const focusEditor = (preserveSelection = false) => {
@@ -202,9 +334,13 @@ const handleClick = (e: MouseEvent) => {
   const isSelect = target.closest('select') || target.closest('option');
   const isModal = target.closest('.pan-modal');
   const isModalOverlay = target.closest('.pan-modal-overlay');
+  const isImageControls = target.closest('.pan-image-controls');
+  if (!isImageControls) {
+    activeImage.value = null;
+  }
   
   // Don't interfere with toolbar interactive elements
-  if (isToolbarButton || isToolbarDropdown || isToolbarColor || isSelect || isModal || isModalOverlay) {
+  if (isToolbarButton || isToolbarDropdown || isToolbarColor || isSelect || isModal || isModalOverlay || isImageControls) {
     return;
   }
   
@@ -223,6 +359,40 @@ const handleClick = (e: MouseEvent) => {
   }, 50);
 };
 
+const handleLayerContentClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  const image = target.closest('img');
+  if (image instanceof HTMLImageElement) {
+    activeImage.value = image;
+    imageWidthControl.value = getImageWidthPercent(image);
+    imageAlignment.value = detectImageAlignment(image);
+    updateImageControlsPosition();
+    return;
+  }
+  activeImage.value = null;
+};
+
+const handleDoubleClick = (e: MouseEvent) => {
+  const layer = canvasRef.value?.layer;
+  if (!layer) return;
+  const target = e.target as HTMLElement;
+  if (!target || !layer.contains(target)) return;
+  if (props.readonly) return;
+  
+  const image = target.closest('img');
+  if (image instanceof HTMLImageElement) {
+    e.preventDefault();
+    handleRequestImageUrl(image.getAttribute('src') || '', image);
+    return;
+  }
+  
+  const link = target.closest('a');
+  if (link instanceof HTMLAnchorElement) {
+    e.preventDefault();
+    handleRequestLink(link.getAttribute('href') || '', link);
+  }
+};
+
 onMounted(() => {
   history.snapshot(props.modelValue || '');
   bindLayer();
@@ -232,19 +402,29 @@ onMounted(() => {
   nextTick(() => {
     if (editorRef.value) {
       editorRef.value.addEventListener('click', handleClick, false);
+      editorRef.value.addEventListener('dblclick', handleDoubleClick, false);
     }
   });
+  window.addEventListener('scroll', updateImageControlsPosition, true);
+  window.addEventListener('resize', updateImageControlsPosition);
 });
 
 onUnmounted(() => {
   if (editorRef.value) {
     editorRef.value.removeEventListener('click', handleClick, false);
+    editorRef.value.removeEventListener('dblclick', handleDoubleClick, false);
   }
+  attachLayerListeners(null);
+  window.removeEventListener('scroll', updateImageControlsPosition, true);
+  window.removeEventListener('resize', updateImageControlsPosition);
 });
 
 watch(
   () => canvasRef.value?.layer,
-  () => bindLayer(),
+  () => {
+    bindLayer();
+    attachLayerListeners(canvasRef.value?.layer || null);
+  },
 );
 
 watch(
@@ -252,6 +432,27 @@ watch(
   (value) => {
     if (value === core.html.value) return;
     core.setHTML(value || '');
+  },
+);
+
+watch(
+  () => activeImage.value,
+  (image) => {
+    if (image) {
+      imageWidthControl.value = getImageWidthPercent(image);
+      imageAlignment.value = detectImageAlignment(image);
+      updateImageControlsPosition();
+    }
+  },
+);
+
+watch(
+  () => imageWidthControl.value,
+  (value) => {
+    if (activeImage.value) {
+      activeImage.value.style.width = `${value}%`;
+      updateImageControlsPosition();
+    }
   },
 );
 
@@ -279,6 +480,16 @@ const handleToolbarCommand = ({ id, value }: { id: string; value?: string }) => 
   // Ensure editor has focus before executing command
   focusEditor(true);
   
+  if (id === 'preview') {
+    showPreviewModal.value = true;
+    return;
+  }
+
+  if (id === 'viewHtml') {
+    showHtmlModal.value = true;
+    return;
+  }
+
   // Small delay to ensure focus is set before executing
   setTimeout(() => {
     if (id === 'undo') {
@@ -328,11 +539,29 @@ const isImmutable = (element: HTMLElement) => core.immutables.isImmutable(elemen
 
 const closeLinkModal = () => {
   showLinkModal.value = false;
+  linkEditingTarget.value = null;
   selectionSnapshot.value = null;
 };
 
 const submitLinkModal = () => {
   if (!linkUrl.value) return;
+  if (linkEditingTarget.value) {
+    const anchor = linkEditingTarget.value;
+    anchor.setAttribute('href', linkUrl.value.trim());
+    if (linkText.value.trim()) {
+      anchor.textContent = linkText.value.trim();
+    }
+    if (linkTarget.value === '_blank') {
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    } else {
+      anchor.removeAttribute('target');
+      anchor.removeAttribute('rel');
+    }
+    showLinkModal.value = false;
+    linkEditingTarget.value = null;
+    return;
+  }
   focusEditor(true);
   restoreSelectionSnapshot();
   applyLink({
@@ -341,20 +570,41 @@ const submitLinkModal = () => {
     target: linkTarget.value,
   });
   showLinkModal.value = false;
+  linkEditingTarget.value = null;
   selectionSnapshot.value = null;
 };
 
 const closeImageUrlModal = () => {
   showImageUrlModal.value = false;
+  imageEditingTarget.value = null;
   selectionSnapshot.value = null;
 };
 
 const submitImageModal = () => {
   if (!imageUrl.value) return;
+  const widthValue = `${imageWidth.value}%`;
+  if (imageEditingTarget.value) {
+    const image = imageEditingTarget.value;
+    image.setAttribute('src', imageUrl.value.trim());
+    if (imageAlt.value.trim()) {
+      image.setAttribute('alt', imageAlt.value.trim());
+    } else {
+      image.removeAttribute('alt');
+    }
+    image.style.width = widthValue;
+    showImageUrlModal.value = false;
+    imageEditingTarget.value = null;
+    return;
+  }
   focusEditor(true);
   restoreSelectionSnapshot();
-  applyImage(imageUrl.value.trim());
+  applyImage({
+    url: imageUrl.value.trim(),
+    alt: imageAlt.value.trim() || undefined,
+    width: widthValue,
+  });
   showImageUrlModal.value = false;
+  imageEditingTarget.value = null;
   selectionSnapshot.value = null;
 };
 
@@ -390,6 +640,59 @@ defineExpose({
       @blur="core.handleBlur"
       @paste="handlePaste"
     />
+    <div
+      v-if="activeImage"
+      class="pan-image-controls"
+      :style="imageControlsStyle"
+    >
+      <div class="pan-image-controls-row">
+        <span class="pan-image-controls-label">Width</span>
+        <input
+          type="range"
+          min="10"
+          max="100"
+          v-model.number="imageWidthControl"
+        />
+        <span class="pan-image-percentage">{{ imageWidthControl }}%</span>
+      </div>
+      <div class="pan-image-controls-row">
+        <span class="pan-image-controls-label">Align</span>
+        <div class="pan-image-align-buttons">
+          <button
+            type="button"
+            class="pan-image-align-btn"
+            :aria-pressed="imageAlignment === 'inline'"
+            @click="setActiveImageAlignment('inline')"
+          >
+            Inline
+          </button>
+          <button
+            type="button"
+            class="pan-image-align-btn"
+            :aria-pressed="imageAlignment === 'left'"
+            @click="setActiveImageAlignment('left')"
+          >
+            Left
+          </button>
+          <button
+            type="button"
+            class="pan-image-align-btn"
+            :aria-pressed="imageAlignment === 'center'"
+            @click="setActiveImageAlignment('center')"
+          >
+            Center
+          </button>
+          <button
+            type="button"
+            class="pan-image-align-btn"
+            :aria-pressed="imageAlignment === 'right'"
+            @click="setActiveImageAlignment('right')"
+          >
+            Right
+          </button>
+        </div>
+      </div>
+    </div>
     <div v-if="showFileBrowser && fileBrowser" class="file-browser-overlay" @click.self="showFileBrowser = false">
       <div class="file-browser-modal">
         <div class="file-browser-modal-header">
@@ -491,6 +794,32 @@ defineExpose({
               required
             />
           </label>
+          <label class="pan-input-label">
+            Alt text
+            <input
+              class="pan-input"
+              type="text"
+              v-model="imageAlt"
+              placeholder="Describe the image"
+            />
+          </label>
+          <label class="pan-input-label">
+            Display width ({{ imageWidth }}%)
+            <div class="pan-width-control">
+              <input
+                type="range"
+                min="10"
+                max="100"
+                v-model.number="imageWidth"
+              />
+              <input
+                type="number"
+                min="10"
+                max="100"
+                v-model.number="imageWidth"
+              />
+            </div>
+          </label>
         </div>
         <div class="pan-modal-actions">
           <button type="button" class="pan-btn" @click="closeImageUrlModal">Cancel</button>
@@ -498,5 +827,37 @@ defineExpose({
         </div>
       </form>
     </div>
+    <div v-if="showPreviewModal" class="pan-modal-overlay" @click.self="showPreviewModal = false">
+      <div class="pan-modal pan-preview-modal">
+        <div class="pan-modal-header">
+          <h3>Content Preview</h3>
+          <button type="button" class="pan-modal-close" @click="showPreviewModal = false" aria-label="Close">×</button>
+        </div>
+        <div class="pan-preview-content" v-html="previewContent"></div>
+        <div class="pan-modal-actions">
+          <button type="button" class="pan-btn pan-btn-primary" @click="showPreviewModal = false">Close Preview</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="showHtmlModal" class="pan-modal-overlay" @click.self="showHtmlModal = false">
+      <div class="pan-modal pan-html-modal">
+        <div class="pan-modal-header">
+          <h3>HTML Source</h3>
+          <button type="button" class="pan-modal-close" @click="showHtmlModal = false" aria-label="Close">×</button>
+        </div>
+        <div class="pan-modal-body">
+          <div class="pan-html-code" v-html="highlightedHtml"></div>
+        </div>
+        <div class="pan-modal-actions">
+          <button type="button" class="pan-btn pan-btn-primary" @click="showHtmlModal = false">Close</button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
+const setActiveImageAlignment = (alignment: 'inline' | 'left' | 'center' | 'right') => {
+  if (!activeImage.value) return;
+  imageAlignment.value = alignment;
+  applyImageAlignment(activeImage.value, alignment);
+  updateImageControlsPosition();
+};

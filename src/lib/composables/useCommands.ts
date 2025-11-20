@@ -25,6 +25,9 @@ export const useCommands = ({
   const lastLink = ref('');
   const lastImage = ref('');
 
+  const escapeAttr = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
   const applyLink = (options: { url: string; text?: string; target?: '_self' | '_blank' }) => {
     const url = options.url?.trim();
     if (!url) return;
@@ -57,11 +60,24 @@ export const useCommands = ({
     }
   };
 
-  const applyImage = (url: string) => {
-    const src = url?.trim();
+  const applyImage = (options: { url: string; width?: string; alt?: string }) => {
+    const src = options.url?.trim();
     if (!src) return;
     lastImage.value = src;
-    exec('insertImage', src);
+    if (options.width || options.alt) {
+      const attrs = [`src="${escapeAttr(src)}"`];
+      if (options.alt) {
+        attrs.push(`alt="${escapeAttr(options.alt)}"`);
+      }
+      const styleParts: string[] = [];
+      if (options.width) {
+        styleParts.push(`width: ${options.width}`);
+      }
+      const styleAttr = styleParts.length ? ` style="${escapeAttr(styleParts.join('; '))}"` : '';
+      exec('insertHTML', `<img ${attrs.join(' ')}${styleAttr} />`);
+    } else {
+      exec('insertImage', src);
+    }
   };
 
   const run = (command: EditorCommand, value?: string) => {
@@ -94,7 +110,7 @@ export const useCommands = ({
       }
       
       if (value) {
-        applyImage(value);
+        applyImage({ url: value });
         return;
       }
       
@@ -106,7 +122,7 @@ export const useCommands = ({
       // Fallback to prompt
       const url = prompt('Image URL or base64 data', lastImage.value || 'https://');
       if (!url) return;
-      applyImage(url);
+      applyImage({ url });
       return;
     }
 
@@ -125,4 +141,3 @@ export const useCommands = ({
     applyImage,
   };
 };
-
