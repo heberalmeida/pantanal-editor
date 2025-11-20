@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+*.log
+*.lock
+/docs/.vuepress/dist
+/docs/.vitepress/*
+/icons/*.zip
+coverage
+*.local
+/.idea
+/.vscode
+teste
+modelo
