@@ -73,9 +73,34 @@ const { toolbarItems } = useToolbar(
   computed(() => props.toolbar),
   computed(() => props.tools)
 );
+const dropdownValues = computed(() => ({
+  fontName: selection.fontName.value,
+  fontSize: selection.fontSize.value,
+}));
 
 const showFileBrowser = ref(false);
 const showImageBrowser = ref(false);
+const showLinkModal = ref(false);
+const showImageUrlModal = ref(false);
+const linkUrl = ref('https://');
+const linkText = ref('');
+const linkTarget = ref<'_self' | '_blank'>('_self');
+const imageUrl = ref('https://');
+const selectionSnapshot = ref<Range[] | null>(null);
+
+const cloneRanges = (ranges: Range[] | null) => ranges?.map((range) => range.cloneRange()) ?? null;
+
+const saveSelectionSnapshot = () => {
+  selectionSnapshot.value = cloneRanges(core.getSelectionRanges());
+};
+
+const restoreSelectionSnapshot = () => {
+  if (!selectionSnapshot.value?.length) return;
+  const selection = window.getSelection();
+  if (!selection) return;
+  selection.removeAllRanges();
+  selectionSnapshot.value.forEach((range) => selection.addRange(range));
+};
 
 const handleFileSelect = (url: string) => {
   core.exec('insertImage', url);
@@ -87,12 +112,42 @@ const handleImageSelect = (url: string) => {
   showImageBrowser.value = false;
 };
 
-const { run } = useCommands({ 
+const getSelectionLink = () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  let node: Node | null = range.startContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+  return node instanceof HTMLElement ? node.closest('a') : null;
+};
+
+const handleRequestLink = (lastValue: string) => {
+  saveSelectionSnapshot();
+  const selection = window.getSelection();
+  const selectedText = selection?.toString().trim() ?? '';
+  const existingLink = getSelectionLink();
+  linkText.value = selectedText || existingLink?.textContent || '';
+  linkUrl.value = existingLink?.getAttribute('href') || lastValue || 'https://';
+  linkTarget.value = existingLink?.getAttribute('target') === '_blank' ? '_blank' : '_self';
+  showLinkModal.value = true;
+};
+
+const handleRequestImageUrl = (lastValue: string) => {
+  saveSelectionSnapshot();
+  imageUrl.value = lastValue || 'https://';
+  showImageUrlModal.value = true;
+};
+
+const { run, applyLink, applyImage } = useCommands({ 
   exec: core.exec,
   fileBrowser: props.fileBrowser,
   imageBrowser: props.imageBrowser,
   onFileSelect: handleFileSelect,
   onImageSelect: handleImageSelect,
+  onRequestLink: handleRequestLink,
+  onRequestImageUrl: handleRequestImageUrl,
 });
 useShortcuts(run);
 const { handlePaste } = usePaste({ 
@@ -145,9 +200,11 @@ const handleClick = (e: MouseEvent) => {
   const isToolbarDropdown = target.closest('.pan-toolbar-dropdown');
   const isToolbarColor = target.closest('.pan-toolbar-color');
   const isSelect = target.closest('select') || target.closest('option');
+  const isModal = target.closest('.pan-modal');
+  const isModalOverlay = target.closest('.pan-modal-overlay');
   
   // Don't interfere with toolbar interactive elements
-  if (isToolbarButton || isToolbarDropdown || isToolbarColor || isSelect) {
+  if (isToolbarButton || isToolbarDropdown || isToolbarColor || isSelect || isModal || isModalOverlay) {
     return;
   }
   
@@ -269,6 +326,38 @@ const onEvent = core.events.on;
 const makeImmutable = (element: HTMLElement) => core.immutables.makeImmutable(element);
 const isImmutable = (element: HTMLElement) => core.immutables.isImmutable(element);
 
+const closeLinkModal = () => {
+  showLinkModal.value = false;
+  selectionSnapshot.value = null;
+};
+
+const submitLinkModal = () => {
+  if (!linkUrl.value) return;
+  focusEditor(true);
+  restoreSelectionSnapshot();
+  applyLink({
+    url: linkUrl.value.trim(),
+    text: linkText.value.trim() || undefined,
+    target: linkTarget.value,
+  });
+  showLinkModal.value = false;
+  selectionSnapshot.value = null;
+};
+
+const closeImageUrlModal = () => {
+  showImageUrlModal.value = false;
+  selectionSnapshot.value = null;
+};
+
+const submitImageModal = () => {
+  if (!imageUrl.value) return;
+  focusEditor(true);
+  restoreSelectionSnapshot();
+  applyImage(imageUrl.value.trim());
+  showImageUrlModal.value = false;
+  selectionSnapshot.value = null;
+};
+
 defineExpose({
   getHTML,
   setHTML,
@@ -286,6 +375,7 @@ defineExpose({
       :active-commands="activeCommands"
       :disabled="readonly"
       :editor-api="editorApi"
+      :dropdown-values="dropdownValues"
       @command="handleToolbarCommand"
       @tool-execute="() => {}"
     />
@@ -343,6 +433,70 @@ defineExpose({
           @cancel="showImageBrowser = false"
         />
       </div>
+    </div>
+    <div v-if="showLinkModal" class="pan-modal-overlay" @click.self="closeLinkModal">
+      <form class="pan-modal" @submit.prevent="submitLinkModal">
+        <div class="pan-modal-header">
+          <h3>Insert Link</h3>
+          <button type="button" class="pan-modal-close" @click="closeLinkModal" aria-label="Close">×</button>
+        </div>
+        <div class="pan-modal-body">
+          <label class="pan-input-label">
+            Link text
+            <input
+              class="pan-input"
+              type="text"
+              v-model="linkText"
+              placeholder="Text to display"
+            />
+          </label>
+          <label class="pan-input-label">
+            URL
+            <input
+              class="pan-input"
+              type="text"
+              v-model="linkUrl"
+              placeholder="https://example.com"
+              required
+            />
+          </label>
+          <label class="pan-input-label">
+            Open link in
+            <select class="pan-input" v-model="linkTarget">
+              <option value="_self">Same tab</option>
+              <option value="_blank">New tab</option>
+            </select>
+          </label>
+        </div>
+        <div class="pan-modal-actions">
+          <button type="button" class="pan-btn" @click="closeLinkModal">Cancel</button>
+          <button type="submit" class="pan-btn pan-btn-primary">Apply Link</button>
+        </div>
+      </form>
+    </div>
+    <div v-if="showImageUrlModal" class="pan-modal-overlay" @click.self="closeImageUrlModal">
+      <form class="pan-modal" @submit.prevent="submitImageModal">
+        <div class="pan-modal-header">
+          <h3>Insert Image</h3>
+          <button type="button" class="pan-modal-close" @click="closeImageUrlModal" aria-label="Close">×</button>
+        </div>
+        <div class="pan-modal-body">
+          <label class="pan-input-label">
+            Image URL
+            <input
+              class="pan-input"
+              type="text"
+              v-model="imageUrl"
+              placeholder="https://example.com/image.png"
+              required
+            />
+          </label>
+        </div>
+        <div class="pan-modal-actions">
+          <button type="button" class="pan-btn" @click="closeImageUrlModal">Cancel</button>
+          <button type="submit" class="pan-btn pan-btn-primary">Insert Image</button>
+        </div>
+      </form>
     </div>
   </section>
 </template>

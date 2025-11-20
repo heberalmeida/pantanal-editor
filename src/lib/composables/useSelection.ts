@@ -10,6 +10,11 @@ export const useSelection = (emitSelection: () => void) => {
   const orderedList = ref(false);
   const unorderedList = ref(false);
   const align = ref<'left' | 'center' | 'right' | 'justify'>('left');
+  const fontName = ref('');
+  const fontSize = ref('');
+
+  const normalizeFontName = (value: string | null) =>
+    (value || '').replace(/['"]/g, '').trim();
 
   const readSelectionState = () => {
     bold.value = query('bold');
@@ -28,6 +33,10 @@ export const useSelection = (emitSelection: () => void) => {
     } else {
       align.value = 'left';
     }
+
+    fontName.value = normalizeFontName(document.queryCommandValue('fontName'));
+    const fontSizeValue = document.queryCommandValue('fontSize');
+    fontSize.value = typeof fontSizeValue === 'string' ? fontSizeValue : `${fontSizeValue ?? ''}`;
   };
 
   const handleSelection = () => {
@@ -51,10 +60,11 @@ export const useSelection = (emitSelection: () => void) => {
     orderedList,
     unorderedList,
     align,
+    fontName,
+    fontSize,
     refresh: readSelectionState,
   };
 };
-
 
 
 

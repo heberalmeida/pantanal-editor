@@ -8,6 +8,7 @@ const props = defineProps<{
   items: ToolbarItem[];
   activeCommands: Record<string, boolean>;
   disabled?: boolean;
+  dropdownValues?: Record<string, string | undefined>;
   editorApi?: {
     getHTML: () => string;
     setHTML: (html: string) => void;
@@ -63,6 +64,7 @@ const handleToolExecute = (context: ToolExecContext) => {
         :label="item.label"
         :options="item.options || []"
         :width="item.width"
+        :value="dropdownValues?.[item.id]"
         :disabled="disabled || item.disabled"
         @change="(value, event) => handleDropdownChange(item.id, value, event)"
       />
@@ -83,6 +85,5 @@ const handleToolExecute = (context: ToolExecContext) => {
     </template>
   </div>
 </template>
-
 
 

@@ -28,7 +28,7 @@ export interface ToolbarItem {
   icon?: string;
   command?: EditorCommand;
   kind: ToolbarKind;
-  options?: Array<{ label: string; value: string }>;
+  options?: Array<{ label: string; value: string; previewStyle?: Record<string, string> }>;
   width?: string;
   disabled?: boolean;
   // Custom tool properties
@@ -69,5 +69,4 @@ export type DeserializationCustom = (html: string) => string;
  * Accepts HTML string and returns modified HTML string
  */
 export type SerializationCustom = (html: string) => string;
-
 

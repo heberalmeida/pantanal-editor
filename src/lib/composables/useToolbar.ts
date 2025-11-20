@@ -2,17 +2,17 @@ import { computed, unref, type MaybeRef } from 'vue';
 import type { ToolbarItem } from '../types/editor';
 
 const FONT_SIZES = [
-  { label: 'Small', value: '2' },
-  { label: 'Normal', value: '3' },
-  { label: 'Large', value: '4' },
-  { label: 'Huge', value: '5' },
+  { label: 'Small', value: '2', previewStyle: { fontSize: '0.85rem' } },
+  { label: 'Normal', value: '3', previewStyle: { fontSize: '1rem' } },
+  { label: 'Large', value: '4', previewStyle: { fontSize: '1.25rem' } },
+  { label: 'Huge', value: '5', previewStyle: { fontSize: '1.5rem' } },
 ];
 
 const FONT_FAMILIES = [
-  { label: 'Inter', value: 'Inter, sans-serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Courier', value: '"Courier New", monospace' },
-  { label: 'Monserrat', value: '"Montserrat", sans-serif' },
+  { label: 'Inter', value: 'Inter', previewStyle: { fontFamily: 'Inter, sans-serif' } },
+  { label: 'Georgia', value: 'Georgia', previewStyle: { fontFamily: 'Georgia, serif' } },
+  { label: 'Courier', value: 'Courier New', previewStyle: { fontFamily: '"Courier New", monospace' } },
+  { label: 'Monserrat', value: 'Montserrat', previewStyle: { fontFamily: '"Montserrat", sans-serif' } },
 ];
 
 const BASE_TOOLBAR: ToolbarItem[] = [
@@ -68,4 +68,3 @@ export const useToolbar = (
     toolbarItems: items,
   };
 };
-
